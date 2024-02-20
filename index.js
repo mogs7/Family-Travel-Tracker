@@ -19,11 +19,6 @@ app.use(express.static("public"));
 
 let currentUserId = 1;
 
-let users = [
-  { id: 1, name: "Angela", color: "teal" },
-  { id: 2, name: "Jack", color: "powderblue" },
-];
-
 async function checkVisisted() {
   const result = await db.query("SELECT country_code FROM visited_countries");
   let countries = [];
@@ -32,17 +27,35 @@ async function checkVisisted() {
   });
   return countries;
 }
+
+async function checkUsers() {
+  const result = await db.query("SELECT * FROM users_country");
+  let users = [];
+  result.rows.forEach((user) => {
+    users.push(user);
+  })
+  console.log(users);
+  return users;
+}
+
+async function currentUser() {
+  const result = await db.query("SELECT * FROM users_country");
+  return (result.rows).find((user) => user.id == currentUserId);
+}
 app.get("/", async (req, res) => {
   const countries = await checkVisisted();
+  const users = await checkUsers();
+  const currUser = await currentUser();
   res.render("index.ejs", {
     countries: countries,
     total: countries.length,
     users: users,
-    color: "teal",
+    color: currUser.color,
   });
 });
 app.post("/add", async (req, res) => {
   const input = req.body["country"];
+  console.log(currentUserId);
 
   try {
     const result = await db.query(
@@ -54,8 +67,8 @@ app.post("/add", async (req, res) => {
     const countryCode = data.country_code;
     try {
       await db.query(
-        "INSERT INTO visited_countries (country_code) VALUES ($1)",
-        [countryCode]
+        "INSERT INTO visited_countries (country_code, user_id) VALUES ($1, $2)",
+        [countryCode,currentUserId]
       );
       res.redirect("/");
     } catch (err) {
@@ -66,7 +79,12 @@ app.post("/add", async (req, res) => {
   }
 });
 app.post("/user", async (req, res) => {
-  res.render("new.ejs");
+  if (req.body.add == "new"){
+    res.render("new.ejs");
+  } else {
+    currentUserId = req.body.user;
+    res.redirect("/");
+  }
 });
 
 app.post("/new", async (req, res) => {
@@ -77,6 +95,7 @@ app.post("/new", async (req, res) => {
   let userColor = req.body.color;
   try {
     await db.query("INSERT INTO users_country (name, color) VALUES ($1, $2)",[userName, userColor]);
+    res.redirect("/");
   } catch (err) {
     console.error(err);
     res.render("new.ejs",{
