@@ -20,7 +20,7 @@ app.use(express.static("public"));
 let currentUserId = 1;
 
 async function checkVisisted() {
-  const result = await db.query("SELECT country_code FROM visited_countries");
+  const result = await db.query("SELECT country_code FROM visited_countries JOIN users_country ON users_country.id = user_id WHERE user_id = $1",[currentUserId]);
   let countries = [];
   result.rows.forEach((country) => {
     countries.push(country.country_code);
@@ -64,19 +64,29 @@ app.post("/add", async (req, res) => {
     );
 
     const data = result.rows[0];
-    const countryCode = data.country_code;
-    try {
-      await db.query(
-        "INSERT INTO visited_countries (country_code, user_id) VALUES ($1, $2)",
-        [countryCode,currentUserId]
-      );
-      res.redirect("/");
-    } catch (err) {
+    if (result.rows.length === 0) {
+      res.render("index.ejs",{
+        countries: await checkVisisted(),
+        total: await checkVisisted().length,
+        users: await checkUsers(),
+        color: await currentUser().color,
+        error: "Country doesn't exist"
+      })
+    } else {
+      const countryCode = data.country_code;
+      try {
+        await db.query(
+          "INSERT INTO visited_countries (country_code, user_id) VALUES ($1, $2)",
+          [countryCode,currentUserId]
+        );
+        res.redirect("/");
+      } catch (err) {
+        console.log(err);
+      }
+    }
+    }catch (err) {
       console.log(err);
     }
-  } catch (err) {
-    console.log(err);
-  }
 });
 app.post("/user", async (req, res) => {
   if (req.body.add == "new"){
@@ -88,8 +98,6 @@ app.post("/user", async (req, res) => {
 });
 
 app.post("/new", async (req, res) => {
-  //Hint: The RETURNING keyword can return the data that was inserted.
-  //https://www.postgresql.org/docs/current/dml-returning.html
   console.log(req.body);
   let userName = req.body.name;
   let userColor = req.body.color;
